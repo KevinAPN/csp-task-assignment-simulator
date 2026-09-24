@@ -78,4 +78,3 @@ El proyecto es totalmente autocontenido y no requiere instalación de dependenci
 
 ---
 
-Desarrollado para la cátedra de **Inteligencia Artificial** (Semestre 8).
