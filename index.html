@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador CSP: Asignación de Tareas con Backtracking</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Estilos para scroll y micro-animaciones */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.08); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .node-pulse {
+      animation: pulse-ring 2s infinite ease-in-out;
+      transform-origin: center;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- BARRA DE NAVEGACIÓN SUPERIOR -->
+  <header class="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-white">CSP Solver Lab</h1>
+          <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">Simulador Didáctico</span>
+        </div>
+        <p class="text-xs text-slate-400 hidden sm:block">Satisfacción de Restricciones &bull; Backtracking &amp; Forward Checking</p>
+      </div>
+    </div>
+
+    <!-- Metadatos de reglas -->
+    <div class="flex items-center space-x-4 text-xs">
+      <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Orden Variables: <strong class="text-indigo-300 font-mono">Ana &rarr; Luis &rarr; Carlos</strong></span>
+        <span class="text-slate-500">&bull;</span>
+        <span>Orden Valores: <strong class="text-indigo-300 font-mono">T1 &rarr; T2 &rarr; T3</strong></span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-300 border border-slate-700 font-medium">Semestre 8 &bull; IA</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL: PANTALLA DIVIDIDA (SPLIT SCREEN) -->
+  <main class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+    <!-- ======================================================== -->
+    <!-- 1. PANEL IZQUIERDO: TABLERO, DOMINIOS Y ANÁLISIS DIDÁCTICO -->
+    <!-- ======================================================== -->
+    <section class="w-full lg:w-6/12 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/40 overflow-y-auto">
+      
+      <!-- Encabezado del Tablero y Restricción Adicional -->
+      <div class="p-6 border-b border-slate-800/80 bg-slate-900/60 shrink-0">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Espacio de Asignación</span>
+          </div>
+          <h2 class="text-xl font-extrabold text-white mt-0.5">CSP: Asignación de Tareas con Backtracking</h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Cada empleado debe realizar exactamente 1 tarea. Ninguna tarea se repite (<strong class="text-slate-200">AllDifferent</strong>).
+          </p>
+        </div>
+
+        <!-- TOGGLE: Restricción Adicional -->
+        <div class="mt-4 p-3 rounded-xl bg-slate-800/50 border border-slate-700/80 flex items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <div class="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-white">Activar Restricción Adicional: Carlos ≠ T3</span>
+                <span id="restrictionBadge" class="px-2 py-0.2 text-[10px] uppercase font-bold rounded-full bg-slate-700 text-slate-300">Inactiva</span>
+              </div>
+              <p class="text-[11px] text-slate-400">Excluye T3 de Carlos de antemano, reduciendo el árbol de 2 soluciones a 1.</p>
+            </div>
+          </div>
+
+          <!-- Switch Toggle Button -->
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" id="toggleRestriction" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500 shadow-inner"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- ÁREA DE TARJETAS HORIZONTALES (EMPLEADOS / VARIABLES) -->
+      <div class="p-5 flex-1 space-y-3.5">
+        
+        <!-- Tarjeta 1: ANA -->
+        <div id="cardAna" class="relative rounded-2xl bg-slate-800/60 border border-slate-700/80 p-4 transition-all duration-300 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            
+            <!-- Perfil Empleado -->
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-bold text-base shadow-inner">
+                AN
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-white tracking-wide">Ana</h3>
+                  <span class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300">Var: X₁</span>
+                  <span id="statusBadgeAna" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">Pendiente</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Dominio inicial: <code class="text-slate-300 font-mono">[T1, T2]</code></p>
+              </div>
+            </div>
+
+            <!-- Chips de Dominios / Tareas (Permanentes) -->
+            <div class="flex flex-col items-start sm:items-end gap-1">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dominios (Sincronizados)</span>
+              <div class="flex items-center gap-1.5" id="domainsAna">
+                <!-- Generados con renderEmployeeChips -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Pie contextual de la variable -->
+          <div class="mt-2.5 pt-2 border-t border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5" id="assignmentTextAna">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              Valor asignado: <strong class="text-slate-400 font-mono">Sin asignar</strong>
+            </span>
+            <span id="domainTextAna" class="text-[11px] text-slate-400 font-mono">D(Ana) = { T1, T2 }</span>
+          </div>
+        </div>
+
+        <!-- Tarjeta 2: LUIS -->
+        <div id="cardLuis" class="relative rounded-2xl bg-slate-800/60 border border-slate-700/80 p-4 transition-all duration-300 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            
+            <!-- Perfil Empleado -->
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 border border-indigo-500/30 flex items-center justify-center text-cyan-300 font-bold text-base shadow-inner">
+                LU
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-white tracking-wide">Luis</h3>
+                  <span class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300">Var: X₂</span>
+                  <span id="statusBadgeLuis" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">Pendiente</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Dominio inicial: <code class="text-slate-300 font-mono">[T1, T3]</code></p>
+              </div>
+            </div>
+
+            <!-- Chips de Dominios / Tareas (Permanentes) -->
+            <div class="flex flex-col items-start sm:items-end gap-1">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dominios (Sincronizados)</span>
+              <div class="flex items-center gap-1.5" id="domainsLuis">
+                <!-- Generados con renderEmployeeChips -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Pie contextual de la variable -->
+          <div class="mt-2.5 pt-2 border-t border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5" id="assignmentTextLuis">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              Valor asignado: <strong class="text-slate-400 font-mono">Sin asignar</strong>
+            </span>
+            <span id="domainTextLuis" class="text-[11px] text-slate-400 font-mono">D(Luis) = { T1, T3 }</span>
+          </div>
+        </div>
+
+        <!-- Tarjeta 3: CARLOS -->
+        <div id="cardCarlos" class="relative rounded-2xl bg-slate-800/60 border border-slate-700/80 p-4 transition-all duration-300 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            
+            <!-- Perfil Empleado -->
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-rose-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 font-bold text-base shadow-inner">
+                CA
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-white tracking-wide">Carlos</h3>
+                  <span class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-slate-700/80 text-slate-300">Var: X₃</span>
+                  <span id="statusBadgeCarlos" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">Pendiente</span>
+                  <span id="carlosConstraintAlert" class="hidden text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    ≠ T3
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Dominio inicial: <code id="carlosInitialDomainText" class="text-slate-300 font-mono">[T2, T3]</code></p>
+              </div>
+            </div>
+
+            <!-- Chips de Dominios / Tareas (Permanentes) -->
+            <div class="flex flex-col items-start sm:items-end gap-1">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dominios (Sincronizados)</span>
+              <div class="flex items-center gap-1.5" id="domainsCarlos">
+                <!-- Generados con renderEmployeeChips -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Pie contextual de la variable -->
+          <div class="mt-2.5 pt-2 border-t border-slate-700/50 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5" id="assignmentTextCarlos">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              Valor asignado: <strong class="text-slate-400 font-mono">Sin asignar</strong>
+            </span>
+            <span id="domainTextCarlos" class="text-[11px] text-slate-400 font-mono">D(Carlos) = { T2, T3 }</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- IMPLEMENTACIÓN 1: PANEL DESTACADO "ANÁLISIS DEL ALGORITMO" -->
+      <!-- ======================================================== -->
+      <div class="px-5 pb-3 shrink-0">
+        <div id="educationalAnalysisPanel" class="p-4 rounded-2xl border transition-all duration-300 shadow-lg bg-slate-900/90 border-slate-700">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+            <div class="flex items-center gap-2">
+              <span id="analysisIcon" class="text-xl select-none">ℹ️</span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-white">Análisis del Algoritmo</h3>
+              <span id="analysisBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-800 text-slate-300 border border-slate-700">
+                Estado Inicial
+              </span>
+            </div>
+            <span id="analysisStepTag" class="text-xs font-mono font-semibold text-slate-400">Paso #0</span>
+          </div>
+          
+          <!-- Explicación en lenguaje natural (Fuente grande y legible) -->
+          <p id="analysisText" class="text-sm sm:text-base font-semibold leading-relaxed text-slate-100 transition-colors duration-200">
+            Estado Inicial: Se configuran las variables Ana, Luis y Carlos con sus dominios iniciales. Presiona "Siguiente Paso" para comenzar.
+          </p>
+
+          <!-- Regla matemática / lógica -->
+          <div id="analysisSubtext" class="mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+            <span class="flex items-center gap-1.5 font-mono">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+              Inferencia: <span id="analysisInferenceType" class="text-slate-300">Inicialización de Dominios</span>
+            </span>
+            <span class="text-slate-500 font-mono">Regla: AllDifferent</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BARRA DE CONTROLES INFERIOR (PINNED) -->
+      <div class="p-4 bg-slate-900/95 border-t border-slate-800 backdrop-blur-md sticky bottom-0 z-10 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          
+          <!-- Controles de Navegación -->
+          <div class="flex items-center gap-2">
+            <!-- Paso Anterior -->
+            <button id="btnPrev" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Paso Anterior</span>
+            </button>
+
+            <!-- Siguiente Paso -->
+            <button id="btnNext" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 border border-indigo-400/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100">
+              <span>Siguiente Paso</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            <!-- Autoplay -->
+            <button id="btnAutoplay" type="button" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center gap-1.5">
+              <svg id="iconPlay" class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <span id="textAutoplay">Autoplay</span>
+            </button>
+
+            <!-- Reiniciar -->
+            <button id="btnReset" type="button" title="Reiniciar búsqueda al paso 0" class="p-2 rounded-xl bg-slate-800/80 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-700/80 hover:border-rose-700/50 transition-all">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Indicador de Paso -->
+          <div class="flex items-center gap-2 text-xs">
+            <div class="px-3 py-1 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-300 font-mono">
+              Paso <span id="stepCounter" class="text-indigo-400 font-bold">0</span> / <span id="totalStepsCount" class="text-slate-500">0</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======================================================== -->
+    <!-- 2. PANEL DERECHO: ÁRBOL DE NODOS GRÁFICO (CANVAS / SVG)    -->
+    <!-- ======================================================== -->
+    <section class="w-full lg:w-6/12 flex flex-col bg-slate-950 overflow-hidden">
+      
+      <!-- CONTADOR DESTACADO: SOLUCIONES Y MÉTRICAS -->
+      <div class="p-5 border-b border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950 shrink-0">
+        <div class="grid grid-cols-3 gap-3">
+          
+          <!-- Soluciones Encontradas -->
+          <div class="col-span-2 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-500/30 p-3.5 shadow-lg flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-semibold uppercase tracking-wider text-indigo-400">Estado de Meta</p>
+              <h3 class="text-xs sm:text-sm font-semibold text-slate-200 mt-0.5">Soluciones Encontradas</h3>
+              <p class="text-[10px] text-slate-500">Asignaciones consistentes completas</p>
+            </div>
+            <div class="text-right">
+              <div id="solutionsCount" class="text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 font-mono">
+                0
+              </div>
+              <span class="text-[10px] text-slate-400 font-mono">Válidas</span>
+            </div>
+          </div>
+
+          <!-- Métrica Secundaria: Retrocesos -->
+          <div class="col-span-1 rounded-2xl bg-slate-900/80 border border-slate-800 p-3.5 flex flex-col justify-between">
+            <span class="text-[10px] font-semibold text-slate-400">Backtracks</span>
+            <div class="flex items-baseline justify-between mt-1">
+              <span id="backtrackCount" class="text-2xl sm:text-3xl font-bold font-mono text-rose-400">0</span>
+              <span class="text-[9px] text-slate-500">Podas</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ENCABEZADO DEL ÁRBOL GRÁFICO -->
+      <div class="px-5 py-2.5 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between shrink-0">
+        <div class="flex items-center space-x-2">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-200">Árbol de Decisión Gráfico (Backtracking)</h2>
+        </div>
+
+        <span class="inline-flex items-center gap-1.5 text-[10px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Árbol Dinámico
+        </span>
+      </div>
+
+      <!-- LIENZO SVG: ÁRBOL DE DECISIÓN GRÁFICO -->
+      <div class="flex-1 overflow-auto p-4 flex flex-col justify-center items-center bg-slate-950/90 relative">
+        
+        <svg id="decisionTreeSvg" viewBox="0 0 540 350" class="w-full h-full max-h-[420px] select-none">
+          <!-- Grupos para líneas y nodos generados dinámicamente -->
+          <g id="treeEdgesGroup"></g>
+          <g id="treeNodesGroup"></g>
+        </svg>
+
+        <!-- LEYENDA DEL ÁRBOL DE NODOS (Colores Requeridos) -->
+        <div class="w-full pt-2 pb-1 border-t border-slate-800/80 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-400 shrink-0">
+          <span class="font-medium text-slate-300">Convención de Nodos:</span>
+          
+          <!-- Gris: actual/evaluando -->
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 text-slate-200 border border-indigo-400 font-medium">
+            <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+            Gris: Actual / Evaluando
+          </span>
+
+          <!-- Verde: camino válido -->
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-300 border border-emerald-500/50 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Verde: Camino Válido (Solución)
+          </span>
+
+          <!-- Rojo: rama inválida -->
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-500/50 font-medium">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+            Rojo: Rama Inválida (Backtrack)
+          </span>
+        </div>
+
+      </div>
+
+      <!-- FOOTER DE CONSOLA -->
+      <div class="p-2.5 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          Recorrido DFS: Pre-orden (Ana &rarr; Luis &rarr; Carlos)
+        </span>
+        <span class="font-mono text-slate-500">Poda: Forward Checking</span>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ======================================================== -->
+  <!-- MOTOR LÓGICO NARRATIVO Y RENDERIZADOR COMPLETO           -->
+  <!-- ======================================================== -->
+  <script>
+    /**
+     * MOTOR LÓGICO NARRATIVO (CSPAnalyzer)
+     * Genera frames inmutables con explicacion_didactica explícita.
+     */
+    class CSPAnalyzer {
+      constructor(carlosRestriction = false) {
+        this.carlosRestriction = Boolean(carlosRestriction);
+        this.variables = ['Ana', 'Luis', 'Carlos'];
+        this.valueOrder = ['T1', 'T2', 'T3'];
+
+        this.initialDomains = {
+          Ana: ['T1', 'T2'],
+          Luis: ['T1', 'T3'],
+          Carlos: this.carlosRestriction ? ['T2'] : ['T2', 'T3']
+        };
+
+        this.frames = [];
+        this.stepId = 0;
+      }
+
+      static generateFrames(carlosRestriction = false) {
+        const analyzer = new CSPAnalyzer(carlosRestriction);
+        return analyzer.solve();
+      }
+
+      cloneAssignment(assignment) {
+        return { ...assignment };
+      }
+
+      cloneDomains(domains) {
+        return {
+          Ana: [...domains.Ana],
+          Luis: [...domains.Luis],
+          Carlos: [...domains.Carlos]
+        };
+      }
+
+      /**
+       * Mapea un estado de asignaciones a su nodo correspondiente en el árbol de decisión
+       */
+      resolveNodeId(assignment, isWipeout, carlosRestriction) {
+        if (!assignment.Ana) return 'root';
+
+        if (assignment.Ana === 'T1') {
+          if (!assignment.Luis) return 'ana_t1';
+          if (assignment.Luis === 'T3') {
+            if (assignment.Carlos === 'T2') return 'carlos_t2_sol1';
+            return 'luis_t3_a1';
+          }
+        }
+
+        if (assignment.Ana === 'T2') {
+          if (carlosRestriction) {
+            if (isWipeout) return 'carlos_fail_restr';
+            return 'ana_t2';
+          }
+          if (!assignment.Luis) return 'ana_t2';
+          if (assignment.Luis === 'T1') {
+            if (assignment.Carlos === 'T3') return 'carlos_t3_sol2';
+            return 'luis_t1_a2';
+          }
+          if (assignment.Luis === 'T3') {
+            if (isWipeout) return 'carlos_fail_a2';
+            return 'luis_t3_a2';
+          }
+        }
+
+        return 'root';
+      }
+
+      addFrame(variable, assignment, domains, actionType, logMessage, explicacionDidactica, isWipeout = false) {
+        const nodeId = this.resolveNodeId(assignment, isWipeout, this.carlosRestriction);
+        this.frames.push({
+          stepId: this.stepId++,
+          currentVariable: variable,
+          currentAssignment: this.cloneAssignment(assignment),
+          currentDomains: this.cloneDomains(domains),
+          actionType, // 'initial' | 'assigning' | 'domain_reduction' | 'backtracking' | 'solution_found'
+          nodeId,
+          logMessage,
+          explicacion_didactica: explicacionDidactica
+        });
+      }
+
+      solve() {
+        this.frames = [];
+        this.stepId = 0;
+
+        const assignment = {
+          Ana: null,
+          Luis: null,
+          Carlos: null
+        };
+
+        const domains = this.cloneDomains(this.initialDomains);
+
+        // Frame inicial (Paso #0)
+        this.addFrame(
+          null,
+          assignment,
+          domains,
+          'initial',
+          'Problema inicializado. Variables y dominios configurados.',
+          'Estado Inicial: Se configuran las variables Ana, Luis y Carlos con sus dominios iniciales. Preparando el árbol de búsqueda para iniciar la asignación.'
+        );
+
+        this.backtrack(0, assignment, domains);
+        return this.frames;
+      }
+
+      backtrack(varIndex, assignment, domains) {
+        // Caso base: Asignación completa consistente
+        if (varIndex === this.variables.length) {
+          this.addFrame(
+            this.variables[varIndex - 1],
+            assignment,
+            domains,
+            'solution_found',
+            `Solución consistente encontrada: Ana=${assignment.Ana}, Luis=${assignment.Luis}, Carlos=${assignment.Carlos}`,
+            '¡Solución encontrada! Todas las variables tienen una asignación válida que cumple las restricciones.'
+          );
+          return;
+        }
+
+        const currentVar = this.variables[varIndex];
+        const availableValues = this.valueOrder.filter(val => domains[currentVar].includes(val));
+
+        // Si una variable no tiene opciones en su dominio (fallo)
+        if (availableValues.length === 0) {
+          this.addFrame(
+            currentVar,
+            assignment,
+            domains,
+            'backtracking',
+            `Dominio vacío en ${currentVar}`,
+            `ALERTA: El dominio de ${currentVar} ha quedado vacío. Es imposible continuar por esta rama sin violar las restricciones.`,
+            true
+          );
+          return;
+        }
+
+        for (const val of availableValues) {
+          // -------------------------------------------------------------
+          // 1. AL INTENTAR ASIGNAR
+          // -------------------------------------------------------------
+          assignment[currentVar] = val;
+          this.addFrame(
+            currentVar,
+            assignment,
+            domains,
+            'assigning',
+            `Asignando ${currentVar} = ${val}`,
+            `Seleccionando variable ${currentVar}. Intentando asignar el valor ${val}.`
+          );
+
+          // -------------------------------------------------------------
+          // 2. FORWARD CHECKING / REDUCCIÓN DE DOMINIOS
+          // -------------------------------------------------------------
+          const newDomains = this.cloneDomains(domains);
+          newDomains[currentVar] = [val];
+
+          let domainWipeout = false;
+          let wipeoutVar = null;
+          const reducedVars = [];
+
+          for (let i = varIndex + 1; i < this.variables.length; i++) {
+            const futureVar = this.variables[i];
+            if (newDomains[futureVar].includes(val)) {
+              newDomains[futureVar] = newDomains[futureVar].filter(t => t !== val);
+              reducedVars.push(futureVar);
+              if (newDomains[futureVar].length === 0) {
+                domainWipeout = true;
+                wipeoutVar = futureVar;
+              }
+            }
+          }
+
+          let fcExplanation = '';
+          if (domainWipeout) {
+            fcExplanation = `Como ${currentVar} tomó ${val}, esta tarea se elimina de los dominios disponibles de ${wipeoutVar} para evitar repeticiones. ALERTA: El dominio de ${wipeoutVar} ha quedado vacío. Es imposible continuar por esta rama sin violar las restricciones.`;
+          } else if (reducedVars.length > 0) {
+            fcExplanation = `Como ${currentVar} tomó ${val}, esta tarea se elimina de los dominios disponibles de ${reducedVars.join(' y ')} para evitar repeticiones.`;
+          } else {
+            fcExplanation = `Como ${currentVar} tomó ${val}, ninguna de las variables pendientes contenía ${val} en su dominio, por lo que no se requieren podas adicionales.`;
+          }
+
+          this.addFrame(
+            currentVar,
+            assignment,
+            newDomains,
+            'domain_reduction',
+            `Forward Checking tras ${currentVar} = ${val}`,
+            fcExplanation,
+            domainWipeout
+          );
+
+          // -------------------------------------------------------------
+          // 3. CONTINUAR O REPORTAR FALLO
+          // -------------------------------------------------------------
+          if (!domainWipeout) {
+            this.backtrack(varIndex + 1, assignment, newDomains);
+          } else {
+            this.addFrame(
+              wipeoutVar,
+              assignment,
+              newDomains,
+              'backtracking',
+              `Fallo por dominio vacío en ${wipeoutVar}`,
+              `ALERTA: El dominio de ${wipeoutVar} ha quedado vacío. Es imposible continuar por esta rama sin violar las restricciones.`,
+              true
+            );
+          }
+
+          // -------------------------------------------------------------
+          // 4. RETROCESO (BACKTRACKING)
+          // -------------------------------------------------------------
+          assignment[currentVar] = null;
+          this.addFrame(
+            currentVar,
+            assignment,
+            domains,
+            'backtracking',
+            `Desasignando ${currentVar} = ${val}`,
+            `Iniciando BACKTRACKING: Deshaciendo la asignación de ${currentVar}=${val} y retrocediendo al nodo anterior para probar otra alternativa.`
+          );
+        }
+      }
+    }
+
+    // ========================================================
+    // DEFINICIÓN DE ESTRUCTURA DEL ÁRBOL (COORDENADAS)
+    // ========================================================
+    const TREE_DEFINITIONS = {
+      normal: {
+        nodes: [
+          { id: 'root', parent: null, label: 'Inicio', x: 270, y: 35, level: 0 },
+          { id: 'ana_t1', parent: 'root', label: 'Ana=T1', x: 135, y: 110, level: 1 },
+          { id: 'ana_t2', parent: 'root', label: 'Ana=T2', x: 405, y: 110, level: 1 },
+          { id: 'luis_t3_a1', parent: 'ana_t1', label: 'Luis=T3', x: 135, y: 195, level: 2 },
+          { id: 'carlos_t2_sol1', parent: 'luis_t3_a1', label: 'Carlos=T2', x: 135, y: 285, level: 3, isSolution: true },
+          { id: 'luis_t1_a2', parent: 'ana_t2', label: 'Luis=T1', x: 330, y: 195, level: 2 },
+          { id: 'carlos_t3_sol2', parent: 'luis_t1_a2', label: 'Carlos=T3', x: 330, y: 285, level: 3, isSolution: true },
+          { id: 'luis_t3_a2', parent: 'ana_t2', label: 'Luis=T3', x: 475, y: 195, level: 2 },
+          { id: 'carlos_fail_a2', parent: 'luis_t3_a2', label: 'Carlos=∅', x: 475, y: 285, level: 3, isConflict: true }
+        ]
+      },
+      restricted: {
+        nodes: [
+          { id: 'root', parent: null, label: 'Inicio', x: 270, y: 35, level: 0 },
+          { id: 'ana_t1', parent: 'root', label: 'Ana=T1', x: 160, y: 110, level: 1 },
+          { id: 'ana_t2', parent: 'root', label: 'Ana=T2', x: 380, y: 110, level: 1 },
+          { id: 'luis_t3_a1', parent: 'ana_t1', label: 'Luis=T3', x: 160, y: 195, level: 2 },
+          { id: 'carlos_fail_restr', parent: 'ana_t2', label: 'Carlos=∅', x: 380, y: 195, level: 2, isConflict: true },
+          { id: 'carlos_t2_sol1', parent: 'luis_t3_a1', label: 'Carlos=T2', x: 160, y: 285, level: 3, isSolution: true }
+        ]
+      }
+    };
+
+    // ========================================================
+    // CONTROLADOR DE INTERFAZ Y RENDERIZADO
+    // ========================================================
+    
+    // Referencias DOM
+    const toggleRestriction = document.getElementById('toggleRestriction');
+    const restrictionBadge = document.getElementById('restrictionBadge');
+    const carlosConstraintAlert = document.getElementById('carlosConstraintAlert');
+    const carlosInitialDomainText = document.getElementById('carlosInitialDomainText');
+
+    const btnNext = document.getElementById('btnNext');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnAutoplay = document.getElementById('btnAutoplay');
+    const iconPlay = document.getElementById('iconPlay');
+    const textAutoplay = document.getElementById('textAutoplay');
+    const btnReset = document.getElementById('btnReset');
+
+    const stepCounter = document.getElementById('stepCounter');
+    const totalStepsCount = document.getElementById('totalStepsCount');
+    const solutionsCount = document.getElementById('solutionsCount');
+    const backtrackCount = document.getElementById('backtrackCount');
+
+    // Panel de Explicación Didáctica
+    const educationalAnalysisPanel = document.getElementById('educationalAnalysisPanel');
+    const analysisIcon = document.getElementById('analysisIcon');
+    const analysisBadge = document.getElementById('analysisBadge');
+    const analysisStepTag = document.getElementById('analysisStepTag');
+    const analysisText = document.getElementById('analysisText');
+    const analysisInferenceType = document.getElementById('analysisInferenceType');
+
+    // SVG Canvas
+    const treeNodesGroup = document.getElementById('treeNodesGroup');
+    const treeEdgesGroup = document.getElementById('treeEdgesGroup');
+
+    // Elementos de Tarjetas de Empleados
+    const employeeCards = {
+      Ana: {
+        card: document.getElementById('cardAna'),
+        domains: document.getElementById('domainsAna'),
+        statusBadge: document.getElementById('statusBadgeAna'),
+        assignmentText: document.getElementById('assignmentTextAna'),
+        domainText: document.getElementById('domainTextAna'),
+        initialDomain: ['T1', 'T2']
+      },
+      Luis: {
+        card: document.getElementById('cardLuis'),
+        domains: document.getElementById('domainsLuis'),
+        statusBadge: document.getElementById('statusBadgeLuis'),
+        assignmentText: document.getElementById('assignmentTextLuis'),
+        domainText: document.getElementById('domainTextLuis'),
+        initialDomain: ['T1', 'T3']
+      },
+      Carlos: {
+        card: document.getElementById('cardCarlos'),
+        domains: document.getElementById('domainsCarlos'),
+        statusBadge: document.getElementById('statusBadgeCarlos'),
+        assignmentText: document.getElementById('assignmentTextCarlos'),
+        domainText: document.getElementById('domainTextCarlos'),
+        initialDomain: ['T2', 'T3']
+      }
+    };
+
+    // Estado Global
+    let frames = [];
+    let currentStep = 0;
+    let isAutoplaying = false;
+    let autoplayInterval = null;
+
+    /**
+     * Inicializa o reinicia la simulación
+     */
+    function initSimulation() {
+      if (isAutoplaying) stopAutoplay();
+
+      const carlosRestriction = toggleRestriction.checked;
+
+      // Actualizar dominios de Carlos
+      employeeCards.Carlos.initialDomain = carlosRestriction ? ['T2'] : ['T2', 'T3'];
+      carlosInitialDomainText.textContent = carlosRestriction ? '[T2]' : '[T2, T3]';
+
+      // Generar Frames
+      frames = CSPAnalyzer.generateFrames(carlosRestriction);
+      currentStep = 0;
+
+      // Renderizar estado inicial
+      renderStep(0);
+    }
+
+    /**
+     * IMPLEMENTACIÓN 4: SINCRONIZACIÓN DE DOMINIOS (Chips permanentes)
+     * Los chips de T1, T2 y T3 nunca desaparecen. Si se podan o no están disponibles,
+     * se muestran gris opaco y tachados con una línea (line-through).
+     */
+    function renderEmployeeChips(employee, currentAssignment, currentDomains, carlosRestriction) {
+      const allTasks = ['T1', 'T2', 'T3'];
+      const initialDomain = employeeCards[employee].initialDomain;
+      const assignedTask = currentAssignment[employee];
+      const activeDomains = currentDomains[employee] || [];
+
+      let html = '';
+      for (const task of allTasks) {
+        const isInInitial = initialDomain.includes(task);
+        const isAssigned = (assignedTask === task);
+        const isInCurrentDomain = activeDomains.includes(task);
+
+        if (isAssigned) {
+          // CHIP ASIGNADO: VERDE BRILLANTE ILUMINADO
+          html += `
+            <div class="px-3 py-1.5 rounded-xl font-mono text-xs font-bold bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25 ring-2 ring-emerald-300 flex items-center gap-1.5 transition-all">
+              <svg class="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>${task}</span>
+              <span class="text-[9px] uppercase px-1 rounded bg-black/20 text-emerald-950 font-sans font-bold">Asignada</span>
+            </div>
+          `;
+        } else if (isInCurrentDomain && isInInitial) {
+          // CHIP DISPONIBLE: OPCIÓN VÁLIDA EN EL DOMINIO ACTUAL
+          html += `
+            <div class="px-3 py-1.5 rounded-xl font-mono text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-600 hover:border-indigo-400 flex items-center gap-1.5 transition-all">
+              <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+              <span>${task}</span>
+              <span class="text-[9px] text-slate-400 font-sans">Opción</span>
+            </div>
+          `;
+        } else {
+          // CHIP NO DISPONIBLE: GRIS OPACO Y TACHADO (LINE-THROUGH) - NUNCA DESAPARECE
+          let reasonTag = 'Podada';
+          if (!isInInitial) {
+            if (employee === 'Carlos' && task === 'T3' && carlosRestriction) {
+              reasonTag = 'Restricción';
+            } else {
+              reasonTag = 'No inicial';
+            }
+          }
+
+          html += `
+            <div title="No disponible en este estado" class="px-2.5 py-1.5 rounded-xl font-mono text-xs font-semibold bg-slate-900/60 text-slate-500 border border-slate-800/80 line-through opacity-45 cursor-not-allowed select-none flex items-center gap-1.5 transition-all">
+              <svg class="w-3 h-3 text-rose-500/60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span>${task}</span>
+              <span class="text-[9px] uppercase px-1 rounded bg-slate-800 text-slate-400 font-sans not-italic no-underline">${reasonTag}</span>
+            </div>
+          `;
+        }
+      }
+      return html;
+    }
+
+    /**
+     * IMPLEMENTACIÓN 1: ACTUALIZACIÓN DEL PANEL DE EXPLICACIÓN EDUCATIVA
+     * Muestra la explicación didáctica con colores e íconos temáticos:
+     * 🔵 (Evaluando/Asignando), 🟡 (Reducción de dominios), 🔴 (Fallo/Backtracking), 🟢 (Solución)
+     */
+    function updateEducationalPanel(frame) {
+      const action = frame.actionType;
+      analysisStepTag.textContent = `Paso #${frame.stepId}`;
+      analysisText.textContent = frame.explicacion_didactica;
+
+      if (action === 'solution_found') {
+        analysisIcon.textContent = '🟢';
+        analysisBadge.textContent = '¡Solución Encontrada!';
+        analysisBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40';
+        educationalAnalysisPanel.className = 'p-4 rounded-2xl border-2 transition-all duration-300 shadow-xl bg-emerald-950/50 border-emerald-400 shadow-emerald-500/20 ring-1 ring-emerald-400/30';
+        analysisText.className = 'text-sm sm:text-base font-bold leading-relaxed text-emerald-100';
+        analysisInferenceType.textContent = 'Estado Meta Satisfecho (Sin Conflictos)';
+      } else if (action === 'backtracking') {
+        analysisIcon.textContent = '🔴';
+        analysisBadge.textContent = 'Fallo / Backtracking';
+        analysisBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        educationalAnalysisPanel.className = 'p-4 rounded-2xl border-2 transition-all duration-300 shadow-lg bg-rose-950/40 border-rose-500 shadow-rose-950/50 ring-1 ring-rose-500/30';
+        analysisText.className = 'text-sm sm:text-base font-semibold leading-relaxed text-rose-100';
+        analysisInferenceType.textContent = 'Poda de Rama y Retroceso Cronológico';
+      } else if (action === 'domain_reduction') {
+        analysisIcon.textContent = '🟡';
+        analysisBadge.textContent = 'Reducción de Dominios';
+        analysisBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        educationalAnalysisPanel.className = 'p-4 rounded-2xl border transition-all duration-300 shadow-md bg-amber-950/20 border-amber-500/50 shadow-amber-500/10';
+        analysisText.className = 'text-sm sm:text-base font-semibold leading-relaxed text-amber-100';
+        analysisInferenceType.textContent = 'Inferencia Forward Checking (Look-ahead)';
+      } else if (action === 'assigning') {
+        analysisIcon.textContent = '🔵';
+        analysisBadge.textContent = 'Evaluando / Asignando';
+        analysisBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+        educationalAnalysisPanel.className = 'p-4 rounded-2xl border transition-all duration-300 shadow-md bg-indigo-950/30 border-indigo-500/50 shadow-indigo-500/10';
+        analysisText.className = 'text-sm sm:text-base font-semibold leading-relaxed text-indigo-100';
+        analysisInferenceType.textContent = 'Ramificación en Árbol de Búsqueda (DFS)';
+      } else {
+        // Estado inicial
+        analysisIcon.textContent = 'ℹ️';
+        analysisBadge.textContent = 'Estado Inicial';
+        analysisBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-800 text-slate-300 border border-slate-700';
+        educationalAnalysisPanel.className = 'p-4 rounded-2xl border transition-all duration-300 shadow-md bg-slate-900/90 border-slate-700';
+        analysisText.className = 'text-sm sm:text-base font-semibold leading-relaxed text-slate-200';
+        analysisInferenceType.textContent = 'Configuración Inicial del CSP';
+      }
+    }
+
+    /**
+     * IMPLEMENTACIÓN 2: ÁRBOL DE NODOS GRÁFICO (Panel Derecho)
+     * Dibuja dinámicamente nodos (cajas) y líneas conectando padre con hijos.
+     * Colores de nodos:
+     * - Gris: Actual / Evaluando
+     * - Verde: Camino válido hacia solución
+     * - Rojo: Rama inválida (backtrack/fallo)
+     */
+    function renderDecisionTree(step) {
+      const carlosRestriction = toggleRestriction.checked;
+      const treeDef = carlosRestriction ? TREE_DEFINITIONS.restricted : TREE_DEFINITIONS.normal;
+      const treeNodes = treeDef.nodes;
+      const currentFrame = frames[step];
+      const currentNodeId = currentFrame.nodeId || 'root';
+
+      // 1. Identificar nodos de soluciones alcanzadas hasta este paso
+      const solutionNodes = new Set();
+      for (let i = 0; i <= step; i++) {
+        const f = frames[i];
+        if (f.actionType === 'solution_found' && f.nodeId) {
+          solutionNodes.add(f.nodeId);
+          // Marcar también sus ancestros
+          let curr = f.nodeId;
+          while (curr && curr !== 'root') {
+            solutionNodes.add(curr);
+            const parentObj = treeNodes.find(n => n.id === curr);
+            curr = parentObj ? parentObj.parent : null;
+          }
+        }
+      }
+
+      // 2. Identificar ramas inválidas (fallos de dominio o backtracked sin solución)
+      const invalidNodes = new Set();
+      for (let i = 0; i <= step; i++) {
+        const f = frames[i];
+        if (f.nodeId && f.nodeId !== 'root') {
+          if (f.nodeId.includes('fail') || (f.actionType === 'backtracking' && !solutionNodes.has(f.nodeId))) {
+            invalidNodes.add(f.nodeId);
+          }
+        }
+      }
+
+      // 3. Identificar nodos visitados en el historial hasta este paso
+      const visitedNodes = new Set(['root']);
+      for (let i = 0; i <= step; i++) {
+        if (frames[i].nodeId) visitedNodes.add(frames[i].nodeId);
+      }
+
+      // 4. Camino activo actual desde la raíz hasta currentNodeId
+      const activePath = new Set();
+      let walk = currentNodeId;
+      while (walk) {
+        activePath.add(walk);
+        const parentObj = treeNodes.find(n => n.id === walk);
+        walk = parentObj ? parentObj.parent : null;
+      }
+
+      // 5. Determinar el estado de cada nodo
+      const nodeStatusMap = {};
+      treeNodes.forEach(node => {
+        if (!visitedNodes.has(node.id)) {
+          nodeStatusMap[node.id] = 'unvisited';
+        } else if (node.id === currentNodeId) {
+          // El nodo del frame actual es 'current' (Gris actual/evaluando) o 'valid' si es solución encontrada
+          nodeStatusMap[node.id] = (currentFrame.actionType === 'solution_found') ? 'valid' : 'current';
+        } else if (solutionNodes.has(node.id)) {
+          nodeStatusMap[node.id] = 'valid'; // Verde
+        } else if (invalidNodes.has(node.id)) {
+          nodeStatusMap[node.id] = 'invalid'; // Rojo
+        } else if (activePath.has(node.id)) {
+          nodeStatusMap[node.id] = 'current'; // Gris camino en evaluación
+        } else {
+          nodeStatusMap[node.id] = 'visited'; // Gris explorado
+        }
+      });
+
+      // 6. DIBUJAR LÍNEAS (EDGES)
+      let edgesSvg = '';
+      treeNodes.forEach(node => {
+        if (!node.parent) return;
+        const parentNode = treeNodes.find(n => n.id === node.parent);
+        if (!parentNode) return;
+
+        const childStatus = nodeStatusMap[node.id];
+        let strokeColor = '#334155';
+        let strokeWidth = '1.5';
+        let strokeDash = '';
+
+        if (childStatus === 'valid') {
+          strokeColor = '#10b981'; // Verde
+          strokeWidth = '2.5';
+        } else if (childStatus === 'invalid') {
+          strokeColor = '#f43f5e'; // Rojo
+          strokeWidth = '2';
+          strokeDash = 'stroke-dasharray="4 3"';
+        } else if (childStatus === 'current') {
+          strokeColor = '#818cf8'; // Índigo en progreso
+          strokeWidth = '2.5';
+        } else if (childStatus === 'unvisited') {
+          strokeColor = '#1e293b';
+          strokeWidth = '1';
+          strokeDash = 'stroke-dasharray="3 3"';
+        }
+
+        // Conectar la parte inferior del padre con la parte superior del hijo
+        edgesSvg += `
+          <line x1="${parentNode.x}" y1="${parentNode.y + 16}" x2="${node.x}" y2="${node.y - 16}" 
+                stroke="${strokeColor}" stroke-width="${strokeWidth}" ${strokeDash} class="transition-colors duration-300" />
+        `;
+      });
+      treeEdgesGroup.innerHTML = edgesSvg;
+
+      // 7. DIBUJAR NODOS (CAJAS Y CÍRCULOS)
+      let nodesSvg = '';
+      treeNodes.forEach(node => {
+        const status = nodeStatusMap[node.id];
+        const isCurrent = (node.id === currentNodeId);
+
+        let fillColor = '#0f172a';
+        let strokeColor = '#334155';
+        let textColor = '#94a3b8';
+        let strokeWidth = '1.5';
+        let extraElements = '';
+
+        if (status === 'valid') {
+          // VERDE: Camino válido / Solución
+          fillColor = '#064e3b';
+          strokeColor = '#10b981';
+          textColor = '#a7f3d0';
+          strokeWidth = '2.5';
+          extraElements = `
+            <circle cx="28" cy="-10" r="7" fill="#10b981" />
+            <path d="M25 -10 l2 2 l4 -4" stroke="#022c22" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          `;
+        } else if (status === 'invalid') {
+          // ROJO: Rama inválida (Backtrack)
+          fillColor = '#4c0519';
+          strokeColor = '#f43f5e';
+          textColor = '#fecdd3';
+          strokeWidth = '2';
+          extraElements = `
+            <circle cx="28" cy="-10" r="7" fill="#f43f5e" />
+            <path d="M25.5 -12.5 l5 5 M30.5 -12.5 l-5 5" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          `;
+        } else if (status === 'current') {
+          // GRIS: Actual / Evaluando
+          fillColor = '#1e293b';
+          strokeColor = '#818cf8';
+          textColor = '#ffffff';
+          strokeWidth = '2.5';
+          if (isCurrent) {
+            extraElements = `
+              <rect x="-43" y="-21" width="86" height="42" rx="13" fill="none" stroke="#6366f1" stroke-width="2" class="node-pulse" />
+              <rect x="-18" y="18" width="36" height="12" rx="4" fill="#4f46e5" />
+              <text x="0" y="27" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="8" font-weight="bold" fill="#ffffff">ACTUAL</text>
+            `;
+          }
+        } else if (status === 'unvisited') {
+          fillColor = '#090d16';
+          strokeColor = '#1e293b';
+          textColor = '#334155';
+          strokeWidth = '1';
+        }
+
+        const boxWidth = (node.id === 'root') ? 80 : 76;
+        const boxHeight = 32;
+
+        nodesSvg += `
+          <g transform="translate(${node.x}, ${node.y})" class="transition-all duration-300">
+            ${extraElements}
+            <rect x="${-boxWidth / 2}" y="${-boxHeight / 2}" width="${boxWidth}" height="${boxHeight}" rx="9" 
+                  fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}" 
+                  class="transition-colors duration-200 shadow-sm" />
+            <text x="0" y="4" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" fill="${textColor}">
+              ${node.label}
+            </text>
+          </g>
+        `;
+      });
+      treeNodesGroup.innerHTML = nodesSvg;
+    }
+
+    /**
+     * Renderiza todo el estado correspondiente a `step`
+     */
+    function renderStep(step) {
+      currentStep = step;
+      const frame = frames[step];
+      if (!frame) return;
+
+      const carlosRestriction = toggleRestriction.checked;
+
+      // 1. Sincronizar tarjetas y dominios en el Panel Izquierdo
+      ['Ana', 'Luis', 'Carlos'].forEach(emp => {
+        const refs = employeeCards[emp];
+        const assignedValue = frame.currentAssignment[emp];
+        const currentDom = frame.currentDomains[emp] || [];
+        const isCurrentVar = (frame.currentVariable === emp);
+
+        // Renderizar chips de tareas (nunca desaparecen)
+        refs.domains.innerHTML = renderEmployeeChips(emp, frame.currentAssignment, frame.currentDomains, carlosRestriction);
+
+        // Resaltar tarjeta si es la variable en evaluación
+        if (isCurrentVar) {
+          refs.card.className = 'relative rounded-2xl bg-slate-800/80 border-2 border-indigo-500 ring-2 ring-indigo-500/20 p-4 transition-all duration-300 shadow-lg shadow-indigo-500/10';
+        } else {
+          refs.card.className = 'relative rounded-2xl bg-slate-800/60 border border-slate-700/80 p-4 transition-all duration-300 shadow-sm';
+        }
+
+        // Badge de estado de la variable
+        if (assignedValue) {
+          refs.statusBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1';
+          refs.statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Asignada (${assignedValue})`;
+        } else if (isCurrentVar) {
+          refs.statusBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1';
+          refs.statusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span> Evaluando`;
+        } else {
+          refs.statusBadge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600';
+          refs.statusBadge.textContent = 'Pendiente';
+        }
+
+        // Textos del pie de tarjeta
+        if (assignedValue) {
+          refs.assignmentText.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Valor asignado: <strong class="text-emerald-400 font-mono">${assignedValue}</strong>`;
+        } else {
+          refs.assignmentText.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Valor asignado: <strong class="text-slate-400 font-mono">Sin asignar</strong>`;
+        }
+
+        refs.domainText.textContent = `D(${emp}) = { ${currentDom.join(', ') || '∅'} }`;
+      });
+
+      // 2. Actualizar Panel de Explicación Educativa
+      updateEducationalPanel(frame);
+
+      // 3. Actualizar Árbol de Nodos Gráfico
+      renderDecisionTree(step);
+
+      // 4. Actualizar Métricas y Contadores
+      stepCounter.textContent = step;
+      totalStepsCount.textContent = frames.length - 1;
+
+      const solutionsCountValue = frames.slice(0, step + 1).filter(f => f.actionType === 'solution_found').length;
+      solutionsCount.textContent = solutionsCountValue;
+
+      const backtracksCountValue = frames.slice(0, step + 1).filter(f => f.actionType === 'backtracking').length;
+      backtrackCount.textContent = backtracksCountValue;
+
+      // 5. Estado de Botones
+      btnPrev.disabled = (step === 0);
+      btnNext.disabled = (step === frames.length - 1);
+
+      if (step === frames.length - 1 && isAutoplaying) {
+        stopAutoplay();
+      }
+    }
+
+    /**
+     * Controles de Autoplay
+     */
+    function toggleAutoplay() {
+      if (isAutoplaying) {
+        stopAutoplay();
+      } else {
+        startAutoplay();
+      }
+    }
+
+    function startAutoplay() {
+      if (currentStep >= frames.length - 1) {
+        currentStep = 0;
+        renderStep(0);
+      }
+
+      isAutoplaying = true;
+      textAutoplay.textContent = 'Pausar';
+      btnAutoplay.className = 'px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400 text-xs font-semibold transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-600/30';
+      iconPlay.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+
+      autoplayInterval = setInterval(() => {
+        if (currentStep < frames.length - 1) {
+          renderStep(currentStep + 1);
+        } else {
+          stopAutoplay();
+        }
+      }, 1300);
+    }
+
+    function stopAutoplay() {
+      isAutoplaying = false;
+      textAutoplay.textContent = 'Autoplay';
+      btnAutoplay.className = 'px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-all flex items-center gap-1.5';
+      iconPlay.innerHTML = '<path d="M8 5v14l11-7z"/>';
+      if (autoplayInterval) {
+        clearInterval(autoplayInterval);
+        autoplayInterval = null;
+      }
+    }
+
+    // ========================================================
+    // REGISTRO DE EVENTOS DE USUARIO
+    // ========================================================
+
+    btnNext.addEventListener('click', () => {
+      if (isAutoplaying) stopAutoplay();
+      if (currentStep < frames.length - 1) {
+        renderStep(currentStep + 1);
+      }
+    });
+
+    btnPrev.addEventListener('click', () => {
+      if (isAutoplaying) stopAutoplay();
+      if (currentStep > 0) {
+        renderStep(currentStep - 1);
+      }
+    });
+
+    btnReset.addEventListener('click', () => {
+      if (isAutoplaying) stopAutoplay();
+      renderStep(0);
+    });
+
+    btnAutoplay.addEventListener('click', toggleAutoplay);
+
+    // Toggle de Restricción Carlos != T3
+    toggleRestriction.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      if (isChecked) {
+        restrictionBadge.textContent = 'Activa';
+        restrictionBadge.className = 'px-2 py-0.5 text-[10px] uppercase font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        carlosConstraintAlert.classList.remove('hidden');
+      } else {
+        restrictionBadge.textContent = 'Inactiva';
+        restrictionBadge.className = 'px-2 py-0.5 text-[10px] uppercase font-bold rounded-full bg-slate-700 text-slate-300';
+        carlosConstraintAlert.classList.add('hidden');
+      }
+
+      // Reinicio limpio con nuevo árbol de posibilidades
+      initSimulation();
+    });
+
+    // Atajos de teclado para docencia y presentaciones
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') {
+        btnNext.click();
+      } else if (e.key === 'ArrowLeft') {
+        btnPrev.click();
+      } else if (e.key === ' ' || e.code === 'Space') {
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+          e.preventDefault();
+          toggleAutoplay();
+        }
+      }
+    });
+
+    // Iniciar al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      initSimulation();
+    });
+  </script>
+</body>
+</html>
